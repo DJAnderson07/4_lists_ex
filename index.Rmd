@@ -1,0 +1,475 @@
+---
+title       : Lists and an Applied Example
+subtitle    : "Lecture 4: Taste of R Workshop, UO COE"
+author      : Daniel Anderson
+framework   : io2012        # {io2012, html5slides, shower, dzslides, ...}
+highlighter : highlight.js  # {highlight.js, prettify, highlight}
+hitheme     : zenburn      # 
+widgets     : [mathjax]            # {mathjax, quiz, bootstrap}
+mode        : selfcontained # {standalone, draft}
+knit        : slidify::knit2slides
+--- 
+<style>
+em {
+  font-style: italic
+}
+</style>
+
+<style>
+strong {
+  font-weight: bold;
+}
+</style>
+
+## Agenda
+* Presentation by Dave Degarmo (~10 minutes)
+* Introduction to Lists
+* Introduction to the *purrr* package for working with lists
+* Artificial example
+* Full applied example
+
+--- .segue
+# lists
+
+----
+## Lists versus other data structures
+
+* To date, we have mostly worked with data frames
+	+ type of list
+* Each column of a data frame is (almost always) an atomic vector of a specific type
+	+ double
+	+ integer
+	+ character
+	+ logical
+* All elements within an atomic vector must be of the same type (implicit coercion). 
+* Lists are vectors (not atomic) where every element can be of a different type, including other lists.
+
+---- &twocol
+## Contrasting lists and atomic vectors
+
+*** =left
+
+# Lists
+```{r list1}
+list("a", 4.35, TRUE, 7L)
+```
+
+*** =right
+
+# Vectors
+(implicit coercion)
+
+```{r vec1}
+c("a", 4.35, TRUE, 7L)
+c(4.35, TRUE, 7L)
+```
+
+----
+## Quick aside
+
+* Logical vectors can be coerced to binary numeric (0/1) and vice versa.
+* This feature can make a really handy way to investigate missing data.
+
+```{r miss_data_sum}
+some_data <- c(12, 15, NA, 5, 7, NA, NA, 18, 6, NA)
+sum(is.na(some_data))
+```
+
+---- &twocol
+## Lists
+Note that the length of list elements can all be different.
+
+*** =left
+
+```{r, list3}
+l <- list(
+	c("a", "b", "c"),
+	1:5,
+	rep(c(T,F), 7),
+	rnorm(3, 100, 25)
+		  )
+```
+
+*** =right
+
+```{r print_list3}
+l
+```
+
+----
+## Lists returned by functions
+* Many functions return a list of objects. This is because lists are a great way to store a lot of varied information. For example: `lm`.
+
+```{r}
+mod <- lm(hp ~ mpg, data = mtcars)
+str(mod)
+```
+
+----
+You can access the elements through the list
+
+```{r}
+mod$coefficients
+```
+
+```{r extract_resids}
+mod$residuals
+```
+
+----
+## Extractors
+
+Often with functions there are more efficient methods for extracting model output.
+
+```{r}
+coef(mod)
+```
+
+In this case the methods are roughly equivalent, but sometimes it can make a
+  difference (*ltm* example)
+
+----
+## Other functions will transform data into lists
+
+```{r}
+cyls <- split(mtcars, mtcars$cyl)
+str(cyls)
+```
+
+----
+## More on lists
+* Note that the previous slide looked like a nested list (list inside a list). 
+  This is because data frames are lists, where each element of the list is a
+  vector of the same length.
+* lists are tremendously useful and flexible, and can lead to massive jumps in efficiency when combined with loops
+  	+ Often want to loop through a list and apply a function to each element
+  	  of the list.
+
+---- &twocol
+## Lists and data frames
+
+*** =left
+
+```{r}
+l <- list(
+	lets = letters[1:5],
+	ints = 9:5,
+	dbl = rnorm(5, 12, 0.75)
+	)
+l
+```
+
+*** =right
+
+```{r as_dframe}
+as.data.frame(l)
+```
+
+--- &twocol
+# Alternative
+
+*** =left
+
+```{r dframe}
+dframe <- data.frame(
+	lets = letters[1:5],
+	ints = 9:5,
+	dbl = rnorm(5, 12, 0.75)
+	)
+dframe
+```
+
+*** =right
+
+```{r dframe_lst}
+as.list(dframe)
+```
+
+---- .segue
+# Brief introduction to *purrr*
+![purr](assets/img/purrr.png)
+
+----
+## *purrr*
+* As everything with the tidyverse, base equivalents exist
+* *purrr* (note three r's) is pipe (`%>%`) friendly
+* Has nice parallelization features. 
+* We'll focus today on `map` and friends, which is the primary function from the package.
+* Generally used with lists (for me at least), but can work with any type of vector.
+
+----
+## Data
+*mtcars* dataset split by cylinder
+
+```{r mtcars_split}
+cyls <- split(mtcars, mtcars$cyl)
+str(cyls)
+```
+
+----
+## `map` basic usage
+
+```{r, map_lm}
+library(purrr)
+map(cyls, ~lm(hp ~ mpg, data = .)) 
+```
+
+---
+## Basic usage
+
+```{r map_basics, eval = FALSE}
+map(LIST, FUN, ...)
+```
+* LIST = list to loop through
+* FUN = Function to loop through the list
+* ... Other arguments passed to the function
+
+---
+## Different ways to specify functions 
+
+The below are equivalent
+
+```{r map_syntax, eval = FALSE}
+map(cyls, function(x) lm(hp ~ mpg, data = x))
+map(cyls, ~lm(hp ~ mpg, data = .)) 
+```
+
+If we want to extract something from each element of the list, and the that something is named, we can also just supply that name as a string. 
+
+```{r map_string}
+models <- map(cyls, ~lm(hp ~ mpg, data = .)) 
+map(models, "coefficients")
+```
+
+---- &twocol
+## Different versions of map
+
+*** =left
+
+If we call a single function, just list it.
+
+```{r diff_maps1}
+lst <- list(first = 1:3, 
+			second = 80:100, 
+			third = -2:4)
+
+map(lst, mean)
+```
+
+`map` will alway return a list. Other variants will return other output.
+
+*** =right
+
+
+```{r dif_maps2}
+map_df(lst, mean)
+map_dbl(lst, mean)
+map_chr(lst, mean)
+```
+
+----
+## Putting them together
+
+```{r linking_funs1, message = FALSE}
+library(tidyverse)
+map(cyls, ~lm(hp ~ mpg, data = .)) %>% 
+	map_df(coef) %>% 
+	mutate(param = c("intercept", "slope")) %>% 
+	gather(cyl, val, -4) %>% 
+	spread(param, val)
+```
+
+----
+## Alternatively: *broom*
+
+```{r broom1}
+library(broom)
+map(cyls, ~lm(hp ~ mpg, data = .)) %>% 
+	map_df(tidy)
+```
+
+--- &twocol
+## More complex versions of `map`
+* `map2` iterates over two lists (or any type of vector) in parallel
+* `pmap` 
+
+# Calculate differences in means
+
+(spacing added just for clarity)
+
+*** =left
+
+```{r map2_1_echo, eval = FALSE}
+set.seed(222)
+map2(list(rnorm(100), 
+		  rnorm(100),
+		  rnorm(100)),
+
+	 list(rnorm(100, 0.5), 
+	 	  rnorm(100, 1), 
+	 	  rnorm(100, 0.2)), 
+
+	~mean(.x) - mean(.y))
+```
+
+*** =right
+
+```{r map2_1_eval, echo = FALSE}
+set.seed(222)
+map2(list(rnorm(100), 
+		  rnorm(100),
+		  rnorm(100)),
+
+	 list(rnorm(100, 0.5), 
+	 	  rnorm(100, 1), 
+	 	  rnorm(100, 0.2)), 
+
+	~mean(.x) - mean(.y))
+```
+
+----
+## Calculate effect sizes
+
+```{r map2_2}
+set.seed(222)
+map2_dbl(list(rnorm(100), 
+		  	  rnorm(100),
+		  	  rnorm(100)),
+
+	 	 list(rnorm(100, 0.5), 
+	 	  	  rnorm(100, 1), 
+	 	  	  rnorm(100, 0.2)),
+
+	~ (mean(.x) - mean(.y)) / sqrt(
+		((length(.x) - 1) * sd(.x) +  (length(.y) - 1) * sd(.y)) /
+					 ((length(.x) + length(.y)) - 2)))
+```
+
+----
+## `pmap`
+* We won't focus on `pmap` today, but it's worth noting that the syntax is slightly different. You supply one (possibly nested) list with all the arguments to the function, and then supply the function.
+
+For example, setup a simulation with different sample sizes, means, and standard deviations. (In this particular example we could )
+
+```{r pmap}
+n <- list(50, 100, 250, 500)
+mu <- list(10, 15, 10, 15)
+stdev <- list(1, 1, 2, 2)
+
+sim_data <- pmap(list(n, mu, stdev), rnorm)
+str(sim_data)
+```
+
+----
+## Use `map` to check simulation
+* *sim_data* is a list, so we can loop through it
+* We saw on the previous slide that the sample sizes were correct. What about the means and standard deviations?
+
+```{r check_pmap_sim}
+map_dbl(sim_data, mean)
+map_dbl(sim_data, sd)
+```
+
+---
+## Nesting data frames
+Rather than splitting data frames (as we did before), it can often be helpful to `nest()` them instead. The reason you would want to nest a data frame is for similar reasons to wanting to split it.
+
+For example,
+
+```{r nest1}
+nested <- mtcars %>% 
+	group_by(cyl) %>% 
+	nest()
+nested
+```
+
+----
+## List columns
+In the previous example:
+* Data are split by cylinder, just as before
+* The list of data are then stored into a list column in a data frame
+* Each "cell" in the list column contains all the data for that corresponding 
+  row in the data frame (cylinder).
+* In some ways this is a bit odd, but it can help us stay organized.
+
+---
+```{r show_nest}
+nested$data
+```
+
+---
+## Fit multiple models
+
+```{r nest_model}
+nested <- nested %>% 
+	mutate(m1_mpg = map(data, ~lm(hp ~ mpg, data = .)),
+		   m2_mpg_disp = map(data, ~lm(hp ~ mpg + disp, data = .)))
+nested
+```
+
+---
+## See models for *mpg* and *disp*
+
+```{r mpg_disp_mod}
+nested$m2_mpg_disp
+```
+
+----
+## Summary of models for *mpg* and *disp*
+
+```{r mpg_disp_mod_summary1}
+map(nested$m2_mpg_disp, summary)
+```
+
+----
+## For the `$` averse
+
+```{r mpg_disp_mod_summary2}
+nested %>% 
+	transmute(smry = map(m2_mpg_disp, summary)) %>% 
+	flatten()
+```
+
+----
+## Another alternative
+
+```{r mpg_disp_mod_summary3}
+nested %>% 
+	select(m2_mpg_disp) %>% 
+	map(map, summary)
+```
+
+---
+## Compare Models
+
+```{r anovas}
+nested <- nested %>% 
+	mutate(m12_comp = map2(m1_mpg, m2_mpg_disp, anova), 
+		   p = map(m12_comp, "Pr(>F)"),
+		   p = map_dbl(p, `[`, 2))
+nested
+```
+
+----
+## Extract all coefficients
+
+```{r broom2}
+coefs <- nested %>% 
+	select(3:4) %>% 
+	map(map_df, tidy) 
+coefs
+```
+
+---
+## Next steps
+From here we could go on to plotting, etc., instead, let's look at a full, applied example that uses some of these topics.
+
+# Context
+* Evaluating intervention response through "checkpoints"
+* Only concerning if students do not receive full credit at each checkpoint
+* Evaluate patterns of checkpoint response to see if we can identify different types of non-responders
+
+# Analysis
+* Examine means at pre- and post-test on various measures of mathematics for student groups (according to their patterns of response)
+* Examine residual gains by groups
+* Ask Lina if you have more questions, she's the guru here.
